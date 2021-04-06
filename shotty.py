@@ -22,6 +22,44 @@ def filter_inst(project):
 def cli():
     """Shotty manage snapshots"""
 
+#Definimos un grupo de commandos llamado Snapshots
+@cli.group('snapshots')
+def snapshots():
+    """Commands for Snapshots"""
+    
+@snapshots.command('list', help="List all snaapshots")    
+@click.option('--project', default=None, help="Targets all snapshots belonging to a project")    
+def list_snapshots(project):
+    "List EC2 Volumes"
+    
+    instances = filter_inst(project)
+          
+    for i in instances:   
+        print(i.id+","+i.state['Name']+"\n\t|")
+        for v in i.volumes.all():     
+            print("\t|--"+v.id+","+v.state)
+            for s in v.snapshots.all():
+                print("\t\t|--"+', '.join((
+                    s.id,
+                    s.state,
+                    s.progress,
+                    s.start_time.strftime("%c"))))
+    return
+
+@snapshots.command('delete', help="Delete all snapshots")    
+@click.option('--project', default=None, help="Targets all snapshots belonging to a project")    
+def delete_snapshots(project):
+    instances = filter_inst(project)
+    for i in instances:   
+        print(i.id+","+i.state['Name']+"\n\t|")
+        for v in i.volumes.all():     
+            print("\t|--"+v.id+","+v.state)
+            for s in v.snapshots.all():
+                s.delete()
+                print("\n\t|-- Deleting: "+s.id)
+                
+    return            
+
 #Definimos un grupo de commandos llamado volumes
 @cli.group('volumes')
 def volumes():
@@ -35,9 +73,9 @@ def list_volumes(project):
     
     instances = filter_inst(project)
           
-    for i in instances:      
+    for i in instances:   
+        print(i.id+","+i.state['Name']+"\n\t|")
         for v in i.volumes.all():
-            print(i.id+","+i.state['Name']+"\n\t|")
             print("\t|--"+', '.join((
                 v.id,
                 v.state,
@@ -94,6 +132,25 @@ def ec2_start(project):
             resp=i.start()
             print("Starting Instance: {0}...State: {1}".format(i.id,resp['StartingInstances'][0]['CurrentState']['Name']))
     return
+
+@instances.command('take_snapshot', help="Take snapshots of selected instances")
+@click.option('--project', default=None, help="Targets all instances belonging to a project")        
+def ec2_take_snap(project):
+    """ Create snapshot of EC2 Instances """
+    instances = filter_inst(project)
+    
+    for i in instances:   
+        i.stop()
+        print(i.id+","+i.state['Name'])
+        i.wait_until_stopped()
+        for v in i.volumes.all():
+              print(v.id+": "+"\t| creating snapshot")  
+              v.create_snapshot(Description="Created by Shotty!")
+              i.start()
+              print(i.id+","+i.state['Name'])
+              i.wait_until_running()
+            
+    return       
 
 if __name__ == '__main__':
     
