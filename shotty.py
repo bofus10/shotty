@@ -1,4 +1,5 @@
 import boto3
+import botocore
 import click
 
 #Generate Session
@@ -17,6 +18,10 @@ def filter_inst(project):
     
     return  instances  
 
+def has_pending(volume):
+    snap = list(volume.snapshots.all())
+    
+    return snap and snap.state == 'pending'
 
 @click.group()
 def cli():
@@ -28,8 +33,9 @@ def snapshots():
     """Commands for Snapshots"""
     
 @snapshots.command('list', help="List all snaapshots")    
-@click.option('--project', default=None, help="Targets all snapshots belonging to a project")    
-def list_snapshots(project):
+@click.option('--project', default=None, help="Targets all snapshots belonging to a project")  
+@click.option('--all', 'list_all', default=False, is_flag=True, help="List All Snapshots")     
+def list_snapshots(project, list_all):
     "List EC2 Volumes"
     
     instances = filter_inst(project)
@@ -44,6 +50,8 @@ def list_snapshots(project):
                     s.state,
                     s.progress,
                     s.start_time.strftime("%c"))))
+                    
+                if s.state == 'completed' and not list_all: break
     return
 
 @snapshots.command('delete', help="Delete all snapshots")    
@@ -117,8 +125,12 @@ def ec2_stop(project):
         if i.state['Name'] == "stopped":
             print("Instances {0} is already stopped".format(i.id))
         else:
-            resp=i.stop()
-            print("Stopping Instance: {0}...State: {1}".format(i.id,resp['StoppingInstances'][0]['CurrentState']['Name']))
+            try:
+                resp=i.stop()
+                print("Stopping Instance: {0}...State: {1}".format(i.id,resp['StoppingInstances'][0]['CurrentState']['Name']))
+            except botocore.exceptions.ClientError as e:
+                print("Instances {0} could not be stopped: {1}".format(i.id,e))
+                continue
     return
 
 @instances.command('start', help="Start all instances")
@@ -129,8 +141,12 @@ def ec2_start(project):
         if i.state['Name'] == "started":
             print("Instances {0} is already started".format(i.id))
         else:
-            resp=i.start()
-            print("Starting Instance: {0}...State: {1}".format(i.id,resp['StartingInstances'][0]['CurrentState']['Name']))
+            try:
+                resp=i.start()
+                print("Starting Instance: {0}...State: {1}".format(i.id,resp['StartingInstances'][0]['CurrentState']['Name']))
+            except botocore.exceptions.ClientError as e:
+                print("Instances {0} could not be started: {1}".format(i.id,e))
+                continue
     return
 
 @instances.command('take_snapshot', help="Take snapshots of selected instances")
@@ -144,11 +160,15 @@ def ec2_take_snap(project):
         print(i.id+","+i.state['Name'])
         i.wait_until_stopped()
         for v in i.volumes.all():
+              if has_pending(v):
+                print("Skipping Snap {0} ...".format(v.id))
+                continue
               print(v.id+": "+"\t| creating snapshot")  
               v.create_snapshot(Description="Created by Shotty!")
-              i.start()
-              print(i.id+","+i.state['Name'])
-              i.wait_until_running()
+              
+        i.start()
+        print(i.id+","+i.state['Name'])
+        i.wait_until_running()
             
     return       
 

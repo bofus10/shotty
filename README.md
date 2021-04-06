@@ -21,5 +21,14 @@ Shotty uses the config file created by aws cli command
 ### Stop EC2 Instances
 	`shotty.py instances stop`	
 	
+### Take Snapshot EC2 Instances
+	`shotty.py instances take_snapshot`	
+	
 ## List EC2 Volumes
 	`shotty.py volumes list`	
+	
+## List EC2 Snapshots
+	`shotty.py snapshots list`		
+	
+### Delete EC2 Snapshots
+	`shotty.py snapshots delete`		
